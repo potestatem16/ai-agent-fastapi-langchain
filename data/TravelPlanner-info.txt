@@ -1,0 +1,127 @@
+# table name:travel_plans
+
+**Main Travel Plans Table Structure**
+
+The PostgreSQL table stores detailed travel plan records, structured as follows:
+
+- **`id`**:  
+  An auto-incrementing integer, serving as the unique primary key for each travel plan.
+
+- **`org` (origin)**:  
+  Text representing the city or location where the travel begins.
+
+- **`dest` (destination)**:  
+  Text indicating the travel destination city.
+
+- **`days`**:  
+  Integer representing the total number of days planned for the trip.
+
+- **`date`**:  
+  An array or list containing one or multiple travel dates (e.g., `['2022-03-22', '2022-03-23', '2022-03-24']`).
+
+- **`query`**:  
+  Original user-generated natural language query describing the travel plan, possibly including specific details like dates, locations, or budget constraints.
+
+- **`level`**:  
+  Text categorizing the complexity or difficulty level of the trip (e.g., "easy").
+
+- **`reference_information`**:  
+  Raw text containing detailed travel information, such as attractions, hotels, flights, etc. Typically requires parsing for structured use.
+
+- **`reference_information_parsed` (JSONB)**:  
+  A JSONB column storing structured travel-related data extracted from `reference_information`. It consists of an array of JSON objects, each with two primary keys:
+  
+  - **`Description`**:  
+    A concise textual summary or title of the travel-related data (e.g., "Attractions in Chicago", "Flights from Sarasota to Chicago").
+    
+  - **`Content`**:  
+    Detailed textual content supporting the description. It may include listings of attractions, flight details, accommodation descriptions, transportation options, and other related travel details.
+
+This design allows standard SQL queries on structured columns (`org`, `dest`, etc.) and powerful JSONB-based queries using PostgreSQL operators (such as `->>` or `@>`) to search within the nested JSON structures.
+
+
+
+# table name:vector_embeddings
+**Vector Store Table Structure**
+
+The vector store table supports semantic searches by storing textual content along with its numerical vector embeddings. The structure includes:
+
+- **`id`**:  
+  Unique integer identifier for each embedding entry.
+
+- **`content`**:  
+  Original textual data corresponding to each embedding. Typically contains descriptive text extracted from travel details.
+
+- **`embedding`**:  
+  A `vector` column storing high-dimensional numerical embeddings representing the semantic meaning of the `content`. Vector dimensions depend on the embedding model used (e.g., OpenAI's `text-embedding-3-small`).
+
+
+
+# Similarity Search Methods
+
+`pgvector` provides several similarity measures for vector searches:
+
+- **`<->` (Euclidean distance)**: Measures the straight-line distance between two vectors. Good for numeric embeddings where magnitude matters.
+
+- **`<#>` (Cosine distance)** *(Default Recommended)*: Measures similarity based on vector direction, independent of magnitude. Ideal for semantic text embeddings, where similarity in meaning is more important than magnitude.
+
+- **`<=>` (Inner product)**: Another similarity metric based on the dot product, often used for embeddings optimized for this measure.
+
+Cosine distance (`<#>`) is recommended by default for semantic text embeddings.
+
+
+## **Performing Semantic Searches**
+
+To retrieve semantically relevant content from the vector store:
+
+### 1. **Generate Query Embedding**
+
+Use your embedding model (e.g., OpenAI’s embedding API) to convert your query text into an embedding:
+
+```python
+query_embedding = client.embeddings.create(
+    input=["your search query"],
+    model="text-embedding-3-small"
+).data[0].embedding
+```
+
+### 2. **Similarity Search Using Cosine Distance (`<#>`)**
+
+Execute the SQL query to retrieve the most semantically similar results from the database:
+
+```sql
+SELECT id, content, 1 - (embedding <#> %s::vector) AS similarity
+FROM vector_embeddings
+ORDER BY embedding <#> %s::vector
+LIMIT 5;
+```
+
+- `%s::vector`: Casts the Python-generated embedding array into PostgreSQL’s vector format.
+- `embedding <#>`: Cosine distance operator, optimal for semantic textual comparisons.
+- `LIMIT 5`: Retrieves the top 5 most semantically similar records.
+
+In Python (using a library like `psycopg2` or Supabase client):
+
+```python
+cursor.execute(sql_query, (query_embedding_str, query_embedding_str))
+results = cursor.fetchall()
+```
+
+---
+
+## **Combined Data Retrieval (Hybrid Search)**
+
+Integrating both structured SQL querying and semantic vector search enables a robust Retrieval Augmented Generation (RAG) system:
+
+- **Structured Queries**:  
+  Efficiently handle precise queries for exact details like specific dates, cities, or structured JSONB fields using regular SQL.
+
+- **Semantic Search**:  
+  Provide flexible, meaning-based searches that go beyond structured queries, retrieving related information semantically through the vector store.
+
+- **Hybrid Retrieval (RAG)**:  
+  Combine both structured and semantic retrieval methods to enrich model responses, allowing users to query using natural language and obtain comprehensive, relevant travel plan information.
+
+---
+
+By organizing data this way, the system can robustly handle both explicit SQL queries and semantic search scenarios, enhancing its flexibility and effectiveness for AI-driven applications and natural language interactions.

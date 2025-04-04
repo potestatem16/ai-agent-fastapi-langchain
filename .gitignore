@@ -1,0 +1,12 @@
+pipvenv/
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+poetry.lock
+poetry.toml
+retrieval_flow.log
+vector_search_results.txt
