@@ -10,3 +10,4 @@ poetry.lock
 poetry.toml
 retrieval_flow.log
 vector_search_results.txt
+visualization_graph.png
